@@ -39,9 +39,6 @@ private:
 template <typename T>
 class ExecutionTimer {
 public:
-    ExecutionTimer() : obj_{nullptr} {
-    }
-
     ExecutionTimer(T* obj) : obj_{obj} {
     }
 
