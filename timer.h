@@ -1,5 +1,5 @@
 #include <chrono>
-#include <cstddef>
+#include <functional>
 #include <iostream>
 #include <type_traits>
 
@@ -7,18 +7,29 @@ namespace timer {
 
 namespace detail {
 
-template <typename T>
-class TimingProxy {
+class TimerBase {
 public:
-    TimingProxy(T* obj) : obj_{obj} {
-        start_ = std::chrono::high_resolution_clock::now();
+    TimerBase() : start{std::chrono::high_resolution_clock::now()} {
     }
 
-    ~TimingProxy() {
-        end_ = std::chrono::high_resolution_clock::now();
-        const std::chrono::duration<double> diff = end_ - start_;
+    ~TimerBase() {
+        end = std::chrono::high_resolution_clock::now();
+        const std::chrono::duration<double> diff = end - start;
         std::cout << "Time: " << diff << std::endl;
     }
+
+protected:
+    std::chrono::time_point<std::chrono::high_resolution_clock> start;
+    std::chrono::time_point<std::chrono::high_resolution_clock> end;
+};
+
+template <typename T>
+class TimerProxy final : private TimerBase {
+public:
+    TimerProxy(T* obj) : obj_{obj} {
+    }
+
+    ~TimerProxy() = default;
 
     const T* operator->() const {
         return obj_;
@@ -30,8 +41,6 @@ public:
 
 private:
     T* obj_;
-    std::chrono::time_point<std::chrono::high_resolution_clock> start_;
-    std::chrono::time_point<std::chrono::high_resolution_clock> end_;
 };
 
 }  // namespace detail
@@ -42,12 +51,12 @@ public:
     ExecutionTimer(T* obj) : obj_{obj} {
     }
 
-    const detail::TimingProxy<T> operator->() const {
-        return detail::TimingProxy(obj_);
+    const detail::TimerProxy<T> operator->() const {
+        return detail::TimerProxy(obj_);
     }
 
-    detail::TimingProxy<T> operator->() {
-        return detail::TimingProxy(obj_);
+    detail::TimerProxy<T> operator->() {
+        return detail::TimerProxy(obj_);
     }
 
 private:
@@ -57,22 +66,15 @@ private:
 template <typename R, typename... Args>
 class ExecutionTimer<R(Args...)> {
 public:
-    ExecutionTimer(std::function<R(Args...)> func) : func_(func) {
+    ExecutionTimer(std::function<R(Args...)> func) : func_{func} {
     }
 
     auto operator()(Args... args) {
-        auto start = std::chrono::high_resolution_clock::now();
-
+        detail::TimerBase timer;
         if constexpr (std::is_void_v<R>) {
             func_(std::forward<Args>(args)...);
-            auto end = std::chrono::high_resolution_clock::now();
-            const std::chrono::duration<double> diff = end - start;
-            std::cout << "Time: " << diff << std::endl;
         } else {
             R result = func_(std::forward<Args>(args)...);
-            auto end = std::chrono::high_resolution_clock::now();
-            const std::chrono::duration<double> diff = end - start;
-            std::cout << "Time: " << diff << std::endl;
             return result;
         }
     }
